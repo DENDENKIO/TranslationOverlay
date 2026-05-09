@@ -6,14 +6,18 @@ using System.Threading.Tasks;
 namespace TranslationOverlay.Services
 {
     /// <summary>
-    /// ejdict-hand ローカル辞書を使った超軽量英和翻訳サービス
+    /// ejdict-hand ローカル辞書を使った超軽量英和・和英翻訳サービス
     /// HTTPサーバー不要・翻訳遅延ほぼゼロ
     /// </summary>
     public class TranslationService
     {
-        // 英単語 → 日本語訳 の辞書（大文字小文字無視）
-        private readonly Dictionary<string, string> _dict
+        // 英単語 → 日本語訳 （大文字小文字無視）
+        private readonly Dictionary<string, string> _enToJa
             = new(StringComparer.OrdinalIgnoreCase);
+
+        // 日本語訳 → 英単語 （和英逆引き）
+        private readonly Dictionary<string, string> _jaToEn
+            = new(StringComparer.Ordinal);
 
         public TranslationService()
         {
@@ -45,7 +49,7 @@ namespace TranslationOverlay.Services
                 var slash = meaning.IndexOf('/');
                 if (slash > 0) meaning = meaning[..slash].Trim();
 
-                // 最初の「、」より前だけ使う（短くする）
+                // 最初の「、」より前だけ使う
                 var comma = meaning.IndexOf('、');
                 if (comma > 0) meaning = meaning[..comma].Trim();
 
@@ -53,14 +57,22 @@ namespace TranslationOverlay.Services
                 var paren = meaning.IndexOf('(');
                 if (paren > 0) meaning = meaning[..paren].Trim();
 
-                if (!string.IsNullOrWhiteSpace(word) && !_dict.ContainsKey(word))
-                {
-                    _dict[word] = meaning;
-                    count++;
-                }
+                if (string.IsNullOrWhiteSpace(word) || string.IsNullOrWhiteSpace(meaning))
+                    continue;
+
+                // 英和登録
+                if (!_enToJa.ContainsKey(word))
+                    _enToJa[word] = meaning;
+
+                // 和英逆引き登録（日本語訳をキーに、英単語を値に）
+                // 同じ日本語訳が複数登録される場合は最初の英単語を使う
+                if (!_jaToEn.ContainsKey(meaning))
+                    _jaToEn[meaning] = word;
+
+                count++;
             }
 
-            Console.WriteLine($"[Dict] {count} 語読み込み完了");
+            Console.WriteLine($"[Dict] {count} 語読み込み完了 (英和:{_enToJa.Count} / 和英:{_jaToEn.Count})");
         }
 
         /// <summary>
@@ -69,56 +81,85 @@ namespace TranslationOverlay.Services
         public Task<string> TranslateChunkAsync(
             string chunk, string sourceLang, string targetLang)
         {
-            // ja→en は未対応（そのまま返す）
-            if (sourceLang != "en")
-                return Task.FromResult(chunk);
+            return sourceLang == "en"
+                ? Task.FromResult(TranslateEnToJa(chunk))
+                : Task.FromResult(TranslateJaToEn(chunk));
+        }
 
+        // ── 英和（en→ja） ─────────────────────────────────
+        private string TranslateEnToJa(string chunk)
+        {
             var words   = chunk.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             var results = new List<string>();
 
             foreach (var w in words)
             {
-                // 記号を除去して小文字化
                 var clean = w.ToLowerInvariant().Trim('.', ',', '?', '!', ':', ';', '"', '\'');
-
                 if (string.IsNullOrEmpty(clean)) continue;
 
-                if (_dict.TryGetValue(clean, out var meaning))
+                if (_enToJa.TryGetValue(clean, out var meaning))
                     results.Add(meaning);
                 else
                 {
-                    // 末尾 s / ed / ing の簡易ステミング
                     var stemmed = TryStem(clean);
-                    if (stemmed != null && _dict.TryGetValue(stemmed, out var stemMeaning))
-                        results.Add(stemMeaning);
+                    if (stemmed != null && _enToJa.TryGetValue(stemmed, out var sm))
+                        results.Add(sm);
                     else
-                        results.Add(clean);  // 未知語はそのまま
+                        results.Add(clean);
                 }
             }
 
-            return Task.FromResult(string.Join(" / ", results));
+            return string.Join(" / ", results);
         }
 
-        /// <summary>簡易ステミング（s / ed / ing を除去して再検索）</summary>
+        // ── 和英（ja→en） ─────────────────────────────────
+        private string TranslateJaToEn(string chunk)
+        {
+            // 日本語はスペースで分割できないため、辞書の日本語訳をキーに総当たり検索
+            var results = new List<string>();
+
+            // 入力文字列を辞書の和訳キーと照合
+            // 最長マッチアルゴリズム
+            int pos = 0;
+            while (pos < chunk.Length)
+            {
+                bool matched = false;
+
+                // 長い文字列から順に全体照合を試みる
+                for (int len = Math.Min(chunk.Length - pos, 10); len >= 1; len--)
+                {
+                    var candidate = chunk.Substring(pos, len);
+                    if (_jaToEn.TryGetValue(candidate, out var eng))
+                    {
+                        results.Add(eng);
+                        pos += len;
+                        matched = true;
+                        break;
+                    }
+                }
+
+                if (!matched)
+                {
+                    // 照合しない文字は1文字ずつ進む
+                    results.Add(chunk[pos].ToString());
+                    pos++;
+                }
+            }
+
+            return string.Join(" ", results);
+        }
+
+        /// <summary>簡易ステミング</summary>
         private static string? TryStem(string word)
         {
             if (word.Length < 4) return null;
-
-            if (word.EndsWith("ing") && word.Length > 5)
-                return word[..^3];            // running → run
-            if (word.EndsWith("ing") && word.Length > 5)
-                return word[..^3] + "e";      // coming → come
-            if (word.EndsWith("ed") && word.Length > 4)
-                return word[..^2];            // talked → talk
-            if (word.EndsWith("ed") && word.Length > 4)
-                return word[..^1];            // liked → like
-            if (word.EndsWith('s') && word.Length > 3)
-                return word[..^1];            // cats → cat
-
+            if (word.EndsWith("ing") && word.Length > 5) return word[..^3];
+            if (word.EndsWith("ed")  && word.Length > 4) return word[..^2];
+            if (word.EndsWith('s')   && word.Length > 3) return word[..^1];
             return null;
         }
 
-        /// <summary>後方互換用（TranslationLoopAsync から呼ばれる場合）</summary>
+        /// <summary>後方互換用</summary>
         public async Task<(string text, long ms)> TranslateAsync(
             string text,
             string sourceLang = "en",
