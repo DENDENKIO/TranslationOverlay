@@ -10,7 +10,6 @@ namespace TranslationOverlay
 {
     public partial class MainWindow : Window
     {
-        private OverlayWindow?       _overlay;
         private AudioCaptureService? _audio;
         private SttService?          _stt;
         private WordScrollOverlay?   _wordScroll;
@@ -54,20 +53,15 @@ namespace TranslationOverlay
             // チャネルをリセット
             _sttChannel = Channel.CreateUnbounded<string>();
 
-            // オーバーレイウィンドウを生成・表示
-            _overlay = new OverlayWindow();
-            _overlay.Show();
-
+            // WordScrollOverlayのみ表示
             _wordScroll = new WordScrollOverlay();
             _wordScroll.Show();
 
             // STTサービス初期化
             _stt = new SttService(modelPath);
-            _stt.PartialResult += text => _overlay.SetPartialText(text);
-            _stt.FinalResult   += text =>
+            _stt.FinalResult += text =>
             {
-                _overlay.SetPartialText(text);           // 確定時点で即表示
-                _sttChannel.Writer.TryWrite(text);       // 翻訳キューへ
+                _sttChannel.Writer.TryWrite(text);  // チャンク翻訳のフォールバック用
             };
             _stt.ChunkReady += OnChunkReady;
 
@@ -79,9 +73,6 @@ namespace TranslationOverlay
             };
             _audio.Start();
 
-            // 翻訳ループをバックグラウンドで起動
-            _ = TranslationLoopAsync(srcLang, tgtLang);
-
             // UI更新
             StatusText.Text      = "● 認識中...";
             StatusText.Foreground = Brushes.Green;
@@ -89,30 +80,10 @@ namespace TranslationOverlay
             StopBtn.IsEnabled    = true;
         }
 
-        // ── 翻訳ループ（バックグラウンド非同期）─────────────
-        private async Task TranslationLoopAsync(string srcLang, string tgtLang)
-        {
-            await foreach (var text in _sttChannel.Reader.ReadAllAsync())
-            {
-                try
-                {
-                    var (translated, ms) = await _mt.TranslateAsync(text, srcLang, tgtLang);
-                    _overlay?.SetFinalText(text, translated);
-                    // _wordScroll?.AddChunks(text, translated);  // チャンクで送信済みのため削除
-                    Console.WriteLine($"[翻訳 {ms}ms] {translated}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[MT ERROR] {ex.Message}");
-                    _overlay?.SetFinalText("[Error]", ex.Message);
-                }
-            }
-        }
-
         // ── 停止ボタン ──────────────────────────────────────
         private void StopBtn_Click(object sender, RoutedEventArgs e)
         {
-            _sttChannel.Writer.Complete();   // 翻訳ループを終了
+            _sttChannel.Writer.Complete();
 
             _audio?.Stop();
             _audio?.Dispose();
@@ -121,9 +92,6 @@ namespace TranslationOverlay
             if (_stt != null) _stt.ChunkReady -= OnChunkReady;
             _stt?.Dispose();
             _stt = null;
-
-            _overlay?.Close();
-            _overlay = null;
 
             _wordScroll?.Close();
             _wordScroll = null;
@@ -138,13 +106,11 @@ namespace TranslationOverlay
         {
             if (string.IsNullOrWhiteSpace(chunk)) return;
 
-            // 翻訳方向を取得
             bool enToJa = true;
             Dispatcher.Invoke(() => enToJa = LangCombo.SelectedIndex == 0);
             string srcLang = enToJa ? "en" : "ja";
             string tgtLang = enToJa ? "ja" : "en";
 
-            // チャンクを即翻訳（Partial中でも発火する）
             try
             {
                 var translated = await _mt.TranslateChunkAsync(chunk, srcLang, tgtLang);
