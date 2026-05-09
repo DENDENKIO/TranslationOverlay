@@ -8,16 +8,17 @@
 
     <StackPanel Margin="24" VerticalAlignment="Center">
 
-        <TextBlock Text="🎙 リアルタイム翻訳オーバーレイ"
+        <TextBlock Text="🎤 リアルタイム翻訳オーバーレイ"
                    FontSize="16" FontWeight="Bold"
                    Margin="0,0,0,20"/>
 
         <!-- 翻訳方向 -->
         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Text="翻訳方向：" Width="80" VerticalAlignment="Center"/>
-            <ComboBox x:Name="LangCombo" Width="180" SelectedIndex="0">
+            <ComboBox x:Name="LangCombo" Width="200" SelectedIndex="0">
                 <ComboBoxItem Content="英語 → 日本語"/>
                 <ComboBoxItem Content="日本語 → 英語"/>
+                <ComboBoxItem Content="日本語 → 擬古文"/>
             </ComboBox>
         </StackPanel>
 

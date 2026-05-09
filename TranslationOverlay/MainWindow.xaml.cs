@@ -25,11 +25,12 @@ namespace TranslationOverlay
 
         private void StartBtn_Click(object sender, RoutedEventArgs e)
         {
-            bool enToJa    = LangCombo.SelectedIndex == 0;
-            string srcLang = enToJa ? "en" : "ja";
-            string tgtLang = enToJa ? "ja" : "en";
+            // 0=en→ja  1=ja→en  2=ja→擬古文
+            int mode = LangCombo.SelectedIndex;
+            string srcLang = (mode == 0) ? "en" : "ja";
+            string tgtLang = (mode == 0) ? "ja" : (mode == 1) ? "en" : "ko"; // ko=擬古文用仮コード
 
-            string modelName = enToJa
+            string modelName = (mode == 0)
                 ? "vosk-model-en-us-0.22-lgraph"
                 : "vosk-model-ja-0.22";
 
@@ -41,14 +42,11 @@ namespace TranslationOverlay
             {
                 MessageBox.Show(
                     $"Voskモデルが見つかりません:\n{modelPath}\n\nmodelsフォルダにモデルを配置してください。",
-                    "モデル未検出",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                    "モデル未検出", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             _sttChannel = Channel.CreateUnbounded<string>();
-
             _wordScroll = new WordScrollOverlay();
             _wordScroll.Show();
 
@@ -70,18 +68,14 @@ namespace TranslationOverlay
         private void StopBtn_Click(object sender, RoutedEventArgs e)
         {
             _sttChannel.Writer.Complete();
-
             _audio?.Stop();
             _audio?.Dispose();
             _audio = null;
-
             if (_stt != null) _stt.ChunkReady -= OnChunkReady;
             _stt?.Dispose();
             _stt = null;
-
             _wordScroll?.Close();
             _wordScroll = null;
-
             StatusText.Text       = "● 停止中";
             StatusText.Foreground = Brushes.Gray;
             StartBtn.IsEnabled    = true;
@@ -92,15 +86,16 @@ namespace TranslationOverlay
         {
             if (string.IsNullOrWhiteSpace(chunk)) return;
 
-            bool enToJa = true;
-            Dispatcher.Invoke(() => enToJa = LangCombo.SelectedIndex == 0);
-            string srcLang = enToJa ? "en" : "ja";
-            string tgtLang = enToJa ? "ja" : "en";
+            int mode = 0;
+            Dispatcher.Invoke(() => mode = LangCombo.SelectedIndex);
 
-            // 全スペースを削除（日本語はVoskが単語間にスペースを入れるため）
-            var display = enToJa
-                ? chunk                                 // 英語はスペースありのまま
-                : chunk.Replace(" ", "");               // 日本語はスペース削除
+            string srcLang = (mode == 0) ? "en" : "ja";
+            string tgtLang = (mode == 0) ? "ja" : (mode == 1) ? "en" : "ko";
+
+            // 日本語モードはスペースを削除
+            var display = (mode == 0)
+                ? chunk
+                : chunk.Replace(" ", "");
 
             try
             {
