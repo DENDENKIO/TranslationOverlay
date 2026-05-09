@@ -19,8 +19,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 英和辞書ファイルをビルド出力先にコピー -->
+    <!-- 英和辞書 -->
     <Content Include="dict\ejdict.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- 擬古文変換辞書（ユーザー定義） -->
+    <Content Include="dict\giko.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
