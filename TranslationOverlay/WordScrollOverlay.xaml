@@ -7,8 +7,7 @@
         Background="Transparent"
         Topmost="True"
         ShowInTaskbar="False"
-        Width="300" Height="500"
-        ResizeMode="NoResize">
+        Width="300" Height="500">
 
     <Border Background="#BB000000"
             CornerRadius="8"
@@ -16,42 +15,49 @@
 
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="26"/>   <!-- タイトルバー（ドラッグ） -->
-                <RowDefinition Height="28"/>   <!-- フォントサイズ調整バー -->
-                <RowDefinition Height="*"/>    <!-- 本文 -->
-                <RowDefinition Height="10"/>   <!-- リサイズハンドル -->
+                <RowDefinition Height="26"/>
+                <RowDefinition Height="28"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="14"/>
             </Grid.RowDefinitions>
 
             <!-- タイトルバー（ドラッグ用） -->
             <Border Grid.Row="0"
-                    Background="#AA333333"
+                    Background="#CC444444"
                     CornerRadius="8,8,0,0"
                     x:Name="DragBar"
-                    Cursor="SizeAll">
-                <TextBlock Text="▶ Word Feed  ↔ drag"
+                    Cursor="SizeAll"
+                    MouseLeftButtonDown="DragBar_MouseLeftButtonDown">
+                <TextBlock Text="▶ Word Feed  │ ドラッグで移動"
                            FontSize="10"
-                           Foreground="#88FFFFFF"
+                           Foreground="#CCFFFFFF"
                            HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           IsHitTestVisible="False"/>
             </Border>
 
-            <!-- フォントサイズ調整バー -->
-            <Border Grid.Row="1" Background="#AA222222" Padding="6,2">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <!-- フォントサイズ調整 -->
+            <Border Grid.Row="1" Background="#AA222222" Padding="6,2"
+                    MouseLeftButtonDown="ControlBar_MouseDown">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            IsHitTestVisible="True">
                     <TextBlock Text="字" Foreground="#88FFFFFF" FontSize="10"
-                               VerticalAlignment="Center" Margin="0,0,4,0"/>
+                               VerticalAlignment="Center" Margin="0,0,4,0"
+                               IsHitTestVisible="False"/>
                     <Slider x:Name="FontSlider"
                             Minimum="8" Maximum="28" Value="12"
-                            Width="130"
+                            Width="120"
                             VerticalAlignment="Center"
                             TickFrequency="1" IsSnapToTickEnabled="True"
-                            ValueChanged="FontSlider_ValueChanged"/>
+                            ValueChanged="FontSlider_ValueChanged"
+                            IsHitTestVisible="True"/>
                     <TextBlock x:Name="FontSizeLabel"
                                Text="12px"
                                Foreground="#AAFFFFFF"
                                FontSize="10"
                                VerticalAlignment="Center"
-                               Margin="6,0,0,0"/>
+                               Margin="6,0,0,0"
+                               IsHitTestVisible="False"/>
                 </StackPanel>
             </Border>
 
@@ -59,21 +65,24 @@
             <ScrollViewer Grid.Row="2"
                           x:Name="Scroller"
                           VerticalScrollBarVisibility="Hidden"
-                          HorizontalScrollBarVisibility="Disabled">
+                          HorizontalScrollBarVisibility="Disabled"
+                          IsHitTestVisible="False">
                 <StackPanel x:Name="WordList"
                             Margin="8,4,8,4"/>
             </ScrollViewer>
 
             <!-- リサイズハンドル（右下） -->
             <Border Grid.Row="3"
-                    Background="#55444444"
+                    Background="#88555555"
                     CornerRadius="0,0,8,8"
                     x:Name="ResizeHandle"
                     Cursor="SizeNWSE"
                     HorizontalAlignment="Right"
-                    Width="20" Height="10">
-                <TextBlock Text="⠿" Foreground="#55FFFFFF" FontSize="8"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    Width="30" Height="14"
+                    MouseLeftButtonDown="ResizeHandle_MouseLeftButtonDown">
+                <TextBlock Text="⤡" Foreground="#AAFFFFFF" FontSize="10"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           IsHitTestVisible="False"/>
             </Border>
 
         </Grid>

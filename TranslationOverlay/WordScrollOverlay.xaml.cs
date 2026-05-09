@@ -11,80 +11,75 @@ namespace TranslationOverlay
 {
     public partial class WordScrollOverlay : Window
     {
-        // ── Win32 クリックスルー ────────────────────
+        // ── Win32 ──────────────────────────────────
         [DllImport("user32.dll")]
-        private static extern int GetWindowLong(IntPtr hwnd, int index);
+        static extern int  GetWindowLong(IntPtr hwnd, int idx);
         [DllImport("user32.dll")]
-        private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
+        static extern int  SetWindowLong(IntPtr hwnd, int idx, int val);
         [DllImport("user32.dll")]
-        private static extern bool ReleaseCapture();
+        static extern bool ReleaseCapture();
         [DllImport("user32.dll")]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
-        private const int GWL_EXSTYLE       = -20;
-        private const int WS_EX_TRANSPARENT = 0x00000020;
-        private const int WS_EX_LAYERED     = 0x00080000;
-        private const int WM_NCLBUTTONDOWN  = 0xA1;
-        private const int HT_BOTTOMRIGHT    = 17;
-        // ────────────────────────────────────────
+        static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr w, IntPtr l);
 
-        private const int MAX_ROWS   = 30;   // 表示最大行数
-        private const int CHUNK_SIZE = 3;
+        const int GWL_EXSTYLE       = -20;
+        const int WS_EX_TRANSPARENT = 0x20;
+        const int WS_EX_LAYERED     = 0x80000;
+        const int WM_NCLBUTTONDOWN  = 0xA1;
+        const int HTBOTTOMRIGHT     = 17;
+        // ─────────────────────────────────────
+
+        const int MAX_ROWS   = 30;
+        const int CHUNK_SIZE = 3;
 
         private double _fontSize = 12;
+        private IntPtr _hwnd;
 
         public WordScrollOverlay()
         {
             InitializeComponent();
-
             Left = SystemParameters.PrimaryScreenWidth - 320;
             Top  = 100;
-
             Loaded += OnLoaded;
-
-            DragBar.MouseLeftButtonDown     += OnDragStart;
-            ResizeHandle.MouseLeftButtonDown += OnResizeStart;
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            SetClickThrough(true);
-        }
-
-        // ── クリックスルー ON/OFF ───────────────────
-        private void SetClickThrough(bool enable)
-        {
-            var hwnd    = new WindowInteropHelper(this).Handle;
-            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-            if (enable)
-                SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED);
-            else
-                SetWindowLong(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_TRANSPARENT);
+            _hwnd = new WindowInteropHelper(this).Handle;
+            // 本文エリアのみクリックスルー
+            // DragBar / ResizeHandle / FontSlider は上記XAML側で
+            // IsHitTestVisible="True" なのでWPFレベルでは反応する。
+            // ただしWindowStyle=Noneの稼流しウィンドウはWin32側の
+            // Transparentビットがあるとマウスイベントそのものが
+            // OS層でブロックされるため、
+            // 最初はクリックスルーなしで起動する。
+            // テキストエリアだけクリックスルーにするには
+            // WM_NCHITTESTのサブクラス指定が必要なので
+            // 今回は全体にクリックを受ける方式にする。
+            // 必要なら後でWS_EX_TRANSPARENTを追加可能。
         }
 
         // ── ドラッグ移動 ──────────────────────────
-        private void OnDragStart(object sender, MouseButtonEventArgs e)
+        private void DragBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            SetClickThrough(false);
+            e.Handled = true;
             DragMove();
-            SetClickThrough(true);
         }
 
-        // ── リサイズ ──────────────────────────────
-        private void OnResizeStart(object sender, MouseButtonEventArgs e)
+        // スライダーバーのクリックをDragMoveに少れないよう捕捉
+        private void ControlBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            SetClickThrough(false);
-            var hwnd = new WindowInteropHelper(this).Handle;
+            // Slider以外の領域をドラッグで移動
+            if (e.OriginalSource is not Slider)
+                DragMove();
+        }
+
+        // ── リサイズ ─────────────────────────────
+        private void ResizeHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
             ReleaseCapture();
-            SendMessage(hwnd, WM_NCLBUTTONDOWN,
-                new IntPtr(HT_BOTTOMRIGHT), IntPtr.Zero);
-            // リサイズ完了後にクリックスルーを復元
-            MouseUp += OnResizeEnd;
-        }
-
-        private void OnResizeEnd(object sender, MouseButtonEventArgs e)
-        {
-            SetClickThrough(true);
-            MouseUp -= OnResizeEnd;
+            SendMessage(_hwnd, WM_NCLBUTTONDOWN,
+                new IntPtr(HTBOTTOMRIGHT), IntPtr.Zero);
         }
 
         // ── フォントサイズスライダー ──────────────────
@@ -95,7 +90,6 @@ namespace TranslationOverlay
             if (FontSizeLabel != null)
                 FontSizeLabel.Text = $"{(int)_fontSize}px";
 
-            // 既存の行すべてのフォントサイズを更新
             if (WordList == null) return;
             foreach (var child in WordList.Children)
             {
@@ -103,15 +97,13 @@ namespace TranslationOverlay
                     border.Child is StackPanel panel)
                 {
                     foreach (var item in panel.Children)
-                    {
                         if (item is TextBlock tb)
                             tb.FontSize = _fontSize;
-                    }
                 }
             }
         }
 
-        // ── 単語チャンクを追加して流す ──────────────
+        // ── 行を追加 ──────────────────────────────
         public void AddChunks(string originalText, string translatedText)
         {
             Dispatcher.InvokeAsync(() =>
@@ -125,15 +117,11 @@ namespace TranslationOverlay
                 for (int i = 0; i < maxLen; i += CHUNK_SIZE)
                 {
                     string origChunk = i < origWords.Length
-                        ? string.Join(" ",
-                            origWords[i..Math.Min(i + CHUNK_SIZE, origWords.Length)])
+                        ? string.Join(" ", origWords[i..Math.Min(i+CHUNK_SIZE, origWords.Length)])
                         : "―";
-
                     string transChunk = i < transWords.Length
-                        ? string.Join(" ",
-                            transWords[i..Math.Min(i + CHUNK_SIZE, transWords.Length)])
+                        ? string.Join(" ", transWords[i..Math.Min(i+CHUNK_SIZE, transWords.Length)])
                         : "―";
-
                     AddRow(origChunk, transChunk);
                 }
 
@@ -150,8 +138,7 @@ namespace TranslationOverlay
             {
                 Margin       = new Thickness(0, 1, 0, 1),
                 Padding      = new Thickness(4, 2, 4, 2),
-                Background   = new SolidColorBrush(
-                                   Color.FromArgb(0x33, 0x22, 0x22, 0x22)),
+                Background   = new SolidColorBrush(Color.FromArgb(0x33,0x22,0x22,0x22)),
                 CornerRadius = new CornerRadius(3),
                 Opacity      = 0
             };
@@ -163,19 +150,16 @@ namespace TranslationOverlay
                 Text       = orig,
                 FontSize   = _fontSize,
                 Foreground = Brushes.White,
-                Margin     = new Thickness(0, 0, 4, 0),
+                Margin     = new Thickness(0,0,4,0),
                 FontFamily = new FontFamily("Yu Gothic UI")
             });
-
             panel.Children.Add(new TextBlock
             {
                 Text       = "→",
                 FontSize   = _fontSize - 1,
-                Foreground = new SolidColorBrush(
-                                 Color.FromArgb(0xAA, 0xFF, 0xFF, 0xFF)),
-                Margin     = new Thickness(0, 0, 4, 0)
+                Foreground = new SolidColorBrush(Color.FromArgb(0xAA,0xFF,0xFF,0xFF)),
+                Margin     = new Thickness(0,0,4,0)
             });
-
             panel.Children.Add(new TextBlock
             {
                 Text       = trans,
