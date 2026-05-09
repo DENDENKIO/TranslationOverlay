@@ -17,14 +17,13 @@ namespace TranslationOverlay.Services
         private readonly Model           _model;
         private readonly VoskRecognizer  _recognizer;
 
-        // ── チャンク管理 ──────────────────────────────
-        private const int CHUNK_WORD_COUNT = 3;   // 何語ごとに送るか
-        private List<string> _pendingWords    = new();  // 送信済みの語
-        private string       _lastPartialText = "";     // 前回のPartial
+        // ── チャンク管理 ────────────────────────────
+        private const int    CHUNK_WORD_COUNT  = 3;
+        private List<string> _pendingWords     = new();
+        private string       _lastPartialText  = "";
 
-        /// <summary>2〜3語チャンクが揃ったときに発火</summary>
+        /// <summary>2〖3語チャンクが揃ったときまたはFinal確定時に発火</summary>
         public event Action<string>? ChunkReady;
-        // ─────────────────────────────────────────────────────
 
         /// <summary>認識途中テキスト</summary>
         public event Action<string>? PartialResult;
@@ -34,51 +33,51 @@ namespace TranslationOverlay.Services
 
         public SttService(string modelPath)
         {
-            Vosk.Vosk.SetLogLevel(-1);  // VoskのLOGを非表示
+            Vosk.Vosk.SetLogLevel(-1);
             _model      = new Model(modelPath);
             _recognizer = new VoskRecognizer(_model, 16000.0f);
             _recognizer.SetMaxAlternatives(0);
             _recognizer.SetWords(false);
         }
 
-        /// <summary>
-        /// NAudio の WASAPIバッファ（IEEE Float / 48kHz / Stereo）を受け取り
-        /// 16kHz / 16bit / Mono に変換して Vosk へ渡す
-        /// </summary>
         public void FeedAudio(byte[] buffer, WaveFormat sourceFormat)
         {
             try
             {
-                // IEEE Float → PCM 16bit 変換パイプライン
-                using var ms       = new MemoryStream(buffer);
-                var raw            = new RawSourceWaveStream(ms, sourceFormat);
-                var ieee           = new WaveToSampleProvider(raw);
-                var mono           = new StereoToMonoSampleProvider(ieee);
-                var resampled      = new WdlResamplingSampleProvider(mono, 16000);
-                var pcm            = new SampleToWaveProvider16(resampled);
+                using var ms  = new MemoryStream(buffer);
+                var raw        = new RawSourceWaveStream(ms, sourceFormat);
+                var ieee       = new WaveToSampleProvider(raw);
+                var mono       = new StereoToMonoSampleProvider(ieee);
+                var resampled  = new WdlResamplingSampleProvider(mono, 16000);
+                var pcm        = new SampleToWaveProvider16(resampled);
 
                 var converted = new byte[buffer.Length * 2];
                 int read      = pcm.Read(converted, 0, converted.Length);
                 if (read == 0) return;
 
-                var chunk = new byte[read];
-                Array.Copy(converted, chunk, read);
+                var audioChunk = new byte[read];
+                Array.Copy(converted, audioChunk, read);
 
-                // Vosk へ渡して結果を取得
-                if (_recognizer.AcceptWaveform(chunk, chunk.Length))
+                if (_recognizer.AcceptWaveform(audioChunk, audioChunk.Length))
                 {
-                    // Final確定
-                    var result  = JObject.Parse(_recognizer.Result());
-                    var text    = result["text"]?.ToString() ?? "";
+                    // ── Final確定 ──────────────────────────────
+                    var result = JObject.Parse(_recognizer.Result());
+                    var text   = result["text"]?.ToString() ?? "";
 
-                    // 残りの未送信語を確定として送る
-                    var finalWords = text.Split(' ',
-                        StringSplitOptions.RemoveEmptyEntries).ToList();
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        var finalWords = text
+                            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                            .ToList();
 
-                    // 送信済みの語数をスキップして残りだけ送る
-                    var remaining = finalWords.Skip(_pendingWords.Count).ToList();
-                    if (remaining.Count > 0)
-                        ChunkReady?.Invoke(string.Join(" ", remaining));
+                        // Partialチャンクで未送信の残り語を送信
+                        var remaining = finalWords.Skip(_pendingWords.Count).ToList();
+                        if (remaining.Count > 0)
+                            ChunkReady?.Invoke(string.Join(" ", remaining));
+                        else if (_pendingWords.Count == 0)
+                            // Partialチャンクが一度も発火されなかった場合は全文を送る
+                            ChunkReady?.Invoke(text);
+                    }
 
                     // リセット
                     _pendingWords.Clear();
@@ -87,29 +86,28 @@ namespace TranslationOverlay.Services
                 }
                 else
                 {
-                    // Partial処理
-                    var partial = JObject.Parse(_recognizer.PartialResult());
+                    // ── Partial処理 ─────────────────────────────
+                    var partial     = JObject.Parse(_recognizer.PartialResult());
                     var partialText = partial["partial"]?.ToString() ?? "";
 
                     if (partialText == _lastPartialText) return;
                     _lastPartialText = partialText;
                     PartialResult?.Invoke(partialText);
 
-                    // ── チャンク分割ロジック ─────────────────────────
-                    var words = partialText.Split(' ',
-                        StringSplitOptions.RemoveEmptyEntries).ToList();
+                    if (string.IsNullOrWhiteSpace(partialText)) return;
 
-                    // _pendingWords より語数が増えた分だけ処理
+                    var words = partialText
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                        .ToList();
+
+                    // CHUNK_WORD_COUNT 語たまるたびに発火
                     while (words.Count >= _pendingWords.Count + CHUNK_WORD_COUNT)
                     {
-                        // 次のチャンクを取り出す
                         var nextChunk = words
                             .GetRange(_pendingWords.Count, CHUNK_WORD_COUNT);
-
                         _pendingWords.AddRange(nextChunk);
                         ChunkReady?.Invoke(string.Join(" ", nextChunk));
                     }
-                    // ─────────────────────────────────────────────────
                 }
             }
             catch (Exception ex)
