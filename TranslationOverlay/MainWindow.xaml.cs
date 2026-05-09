@@ -15,7 +15,6 @@ namespace TranslationOverlay
         private WordScrollOverlay?   _wordScroll;
         private readonly TranslationService _mt = new();
 
-        // STT確定テキストを翻訳ループへ渡す非同期チャネル
         private Channel<string> _sttChannel =
             Channel.CreateUnbounded<string>();
 
@@ -24,10 +23,8 @@ namespace TranslationOverlay
             InitializeComponent();
         }
 
-        // ── 開始ボタン ──────────────────────────────────────
         private void StartBtn_Click(object sender, RoutedEventArgs e)
         {
-            // 翻訳方向を取得
             bool enToJa    = LangCombo.SelectedIndex == 0;
             string srcLang = enToJa ? "en" : "ja";
             string tgtLang = enToJa ? "ja" : "en";
@@ -50,37 +47,26 @@ namespace TranslationOverlay
                 return;
             }
 
-            // チャネルをリセット
             _sttChannel = Channel.CreateUnbounded<string>();
 
-            // WordScrollOverlayのみ表示
             _wordScroll = new WordScrollOverlay();
             _wordScroll.Show();
 
-            // STTサービス初期化
             _stt = new SttService(modelPath);
-            _stt.FinalResult += text =>
-            {
-                _sttChannel.Writer.TryWrite(text);  // チャンク翻訳のフォールバック用
-            };
-            _stt.ChunkReady += OnChunkReady;
+            _stt.FinalResult += text => _sttChannel.Writer.TryWrite(text);
+            _stt.ChunkReady  += OnChunkReady;
 
-            // 音声キャプチャ開始
             _audio = new AudioCaptureService();
             _audio.AudioDataAvailable += (buffer, format) =>
-            {
                 _stt?.FeedAudio(buffer, format);
-            };
             _audio.Start();
 
-            // UI更新
-            StatusText.Text      = "● 認識中...";
+            StatusText.Text       = "● 認識中...";
             StatusText.Foreground = Brushes.Green;
-            StartBtn.IsEnabled   = false;
-            StopBtn.IsEnabled    = true;
+            StartBtn.IsEnabled    = false;
+            StopBtn.IsEnabled     = true;
         }
 
-        // ── 停止ボタン ──────────────────────────────────────
         private void StopBtn_Click(object sender, RoutedEventArgs e)
         {
             _sttChannel.Writer.Complete();
@@ -111,10 +97,15 @@ namespace TranslationOverlay
             string srcLang = enToJa ? "en" : "ja";
             string tgtLang = enToJa ? "ja" : "en";
 
+            // 全スペースを削除（日本語はVoskが単語間にスペースを入れるため）
+            var display = enToJa
+                ? chunk                                 // 英語はスペースありのまま
+                : chunk.Replace(" ", "");               // 日本語はスペース削除
+
             try
             {
-                var translated = await _mt.TranslateChunkAsync(chunk, srcLang, tgtLang);
-                _wordScroll?.AddChunks(chunk, translated);
+                var translated = await _mt.TranslateChunkAsync(display, srcLang, tgtLang);
+                _wordScroll?.AddChunks(display, translated);
             }
             catch (Exception ex)
             {
