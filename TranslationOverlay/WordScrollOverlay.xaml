@@ -7,40 +7,75 @@
         Background="Transparent"
         Topmost="True"
         ShowInTaskbar="False"
-        Width="260" Height="400">
+        Width="300" Height="500"
+        ResizeMode="NoResize">
 
     <Border Background="#BB000000"
             CornerRadius="8"
             x:Name="RootBorder">
 
-        <!-- Drag handle bar at top -->
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="22"/>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="26"/>   <!-- タイトルバー（ドラッグ） -->
+                <RowDefinition Height="28"/>   <!-- フォントサイズ調整バー -->
+                <RowDefinition Height="*"/>    <!-- 本文 -->
+                <RowDefinition Height="10"/>   <!-- リサイズハンドル -->
             </Grid.RowDefinitions>
 
-            <!-- Title bar for drag -->
+            <!-- タイトルバー（ドラッグ用） -->
             <Border Grid.Row="0"
                     Background="#AA333333"
                     CornerRadius="8,8,0,0"
                     x:Name="DragBar"
                     Cursor="SizeAll">
-                <TextBlock Text="▶ Word Feed"
+                <TextBlock Text="▶ Word Feed  ↔ drag"
                            FontSize="10"
                            Foreground="#88FFFFFF"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"/>
             </Border>
 
-            <!-- Scrolling word list -->
-            <ScrollViewer Grid.Row="1"
+            <!-- フォントサイズ調整バー -->
+            <Border Grid.Row="1" Background="#AA222222" Padding="6,2">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="字" Foreground="#88FFFFFF" FontSize="10"
+                               VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <Slider x:Name="FontSlider"
+                            Minimum="8" Maximum="28" Value="12"
+                            Width="130"
+                            VerticalAlignment="Center"
+                            TickFrequency="1" IsSnapToTickEnabled="True"
+                            ValueChanged="FontSlider_ValueChanged"/>
+                    <TextBlock x:Name="FontSizeLabel"
+                               Text="12px"
+                               Foreground="#AAFFFFFF"
+                               FontSize="10"
+                               VerticalAlignment="Center"
+                               Margin="6,0,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 本文スクロール -->
+            <ScrollViewer Grid.Row="2"
                           x:Name="Scroller"
                           VerticalScrollBarVisibility="Hidden"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="WordList"
                             Margin="8,4,8,4"/>
             </ScrollViewer>
+
+            <!-- リサイズハンドル（右下） -->
+            <Border Grid.Row="3"
+                    Background="#55444444"
+                    CornerRadius="0,0,8,8"
+                    x:Name="ResizeHandle"
+                    Cursor="SizeNWSE"
+                    HorizontalAlignment="Right"
+                    Width="20" Height="10">
+                <TextBlock Text="⠿" Foreground="#55FFFFFF" FontSize="8"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+
         </Grid>
     </Border>
 </Window>
