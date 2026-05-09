@@ -1,0 +1,46 @@
+<Window x:Class="TranslationOverlay.WordScrollOverlay"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WordScroll"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        Width="260" Height="400">
+
+    <Border Background="#BB000000"
+            CornerRadius="8"
+            x:Name="RootBorder">
+
+        <!-- Drag handle bar at top -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="22"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title bar for drag -->
+            <Border Grid.Row="0"
+                    Background="#AA333333"
+                    CornerRadius="8,8,0,0"
+                    x:Name="DragBar"
+                    Cursor="SizeAll">
+                <TextBlock Text="▶ Word Feed"
+                           FontSize="10"
+                           Foreground="#88FFFFFF"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"/>
+            </Border>
+
+            <!-- Scrolling word list -->
+            <ScrollViewer Grid.Row="1"
+                          x:Name="Scroller"
+                          VerticalScrollBarVisibility="Hidden"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="WordList"
+                            Margin="8,4,8,4"/>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</Window>

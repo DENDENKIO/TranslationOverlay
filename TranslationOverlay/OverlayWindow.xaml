@@ -1,0 +1,50 @@
+<Window x:Class="TranslationOverlay.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TranslationOverlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        IsHitTestVisible="False"
+        Left="0" Top="0"
+        Width="1920" Height="140">
+
+    <Grid VerticalAlignment="Bottom">
+        <Border Background="#CC000000"
+                CornerRadius="10"
+                Margin="24,0,24,12"
+                Padding="20,10">
+            <StackPanel>
+
+                <!-- Original text: white -->
+                <TextBlock x:Name="OriginalText"
+                           Text=""
+                           FontFamily="Yu Gothic UI"
+                           FontSize="18"
+                           FontWeight="Normal"
+                           Foreground="White"
+                           TextWrapping="Wrap"
+                           HorizontalAlignment="Center"
+                           Opacity="0.85"/>
+
+                <!-- Separator line -->
+                <Separator Margin="0,4,0,4"
+                           Background="#55FFFFFF"/>
+
+                <!-- Translation text: yellow -->
+                <TextBlock x:Name="TranslationText"
+                           Text="Starting..."
+                           FontFamily="Yu Gothic UI"
+                           FontSize="22"
+                           FontWeight="Bold"
+                           Foreground="Yellow"
+                           TextWrapping="Wrap"
+                           HorizontalAlignment="Center"
+                           Opacity="1.0"/>
+
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
